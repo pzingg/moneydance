@@ -71,49 +71,8 @@ def mdQty(qtyStr, decimals):
     frac = frac + '0'
   return int(neg + md + frac)
 
-def processRow(row, rootAcct, invAcct, autoAcct):
-  tickerSym = row['Security']
-  currencies = rootAcct.getCurrencyTable()
-  curr = currencies.getCurrencyByTickerSymbol(tickerSym)
-  if curr is None:
-    print tickerSym, " security not found"
-    return 0
-  secAcctName = invAcct.getAccountName() + ':' + curr.getName()
-  secAcct = rootAcct.getAccountByName(secAcctName)
-  if secAcct is None:
-    print secAcctName, " security acct not found"
-    return 0
-  
-  decimals = secAcct.getCurrencyType().getDecimalPlaces()
-  dateInt = mdDate(row['Date'])
-  val = mdQty(row['Quantity'], decimals) # buy > 0, sell < 0
-  amt = mdQty(row['Amount'], 2) # in csv file, buy is > 0, sell is < 0
-  rate = float(val)/float(amt)
-  
-  print row
-  print "date ", dateInt, " val ", val, " amt ", amt, " rate ", rate
-  
-  desc = row['Category']
-  memo = ''
-  price = row['Price']
-  action = row['Action']
-  if action == 'Buy':
-    txnDetail = row['Transaction Type']
-    print "detail ", txnDetail
-    if txnDetail.find('Gain/Loss') >= 0 and txnDetail.find('Money Market') >= 0:
-      action = 'REINVDIV'
-    if txnDetail.find('contribution') >= 0:
-      action = 'BuyXfr'
-    else:
-      pass
-  elif action == 'Sell':
-    pass
-  elif action == 'REINVDIV':
-    pass
-  else:
-    print "unhandled action ", action
-    return 0
-  print "ticker ", tickerSym, " date ", dateInt, " action ", action
+def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate):
+  txnSet = rootAcct.getTransactionSet()  
   txn = ParentTxn(dateInt, dateInt, dateInt, "", invAcct,  desc, memo, -1, AbstractTxn.STATUS_UNRECONCILED)
   if action == 'Buy' or action == 'Sell':
     txn.setTransferType(AbstractTxn.TRANSFER_TYPE_BUYSELL)
@@ -137,8 +96,64 @@ def processRow(row, rootAcct, invAcct, autoAcct):
     incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'inc')
     txn.addSplit(incSplit)
-  txnSet = rootAcct.getTransactionSet()
+  elif action == 'MiscInc' or action == 'MiscExp':
+    txn.setTransferType(AbstractTxn.TRANSFER_TYPE_MISCINCEXP)
+    secSplit = SplitTxn(txn, 0, 0, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
+    secSplit.setTag('invest.splittype', 'sec')
+    txn.addSplit(secSplit)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    if action == 'MiscInc':
+      incSplit.setTag('invest.splittype', 'inc')
+    else:
+      incSplit.setTag('invest.splittype', 'exp')
+    txn.addSplit(incSplit)
   txnSet.addNewTxn(txn)
+
+def processRow(row, rootAcct, invAcct, autoAcct):
+  tickerSym = row['Security']
+  currencies = rootAcct.getCurrencyTable()
+  curr = currencies.getCurrencyByTickerSymbol(tickerSym)
+  if curr is None:
+    print tickerSym, " security not found"
+    return 0
+  secAcctName = invAcct.getAccountName() + ':' + curr.getName()
+  secAcct = rootAcct.getAccountByName(secAcctName)
+  if secAcct is None:
+    print secAcctName, " security acct not found"
+    return 0
+  
+  decimals = secAcct.getCurrencyType().getDecimalPlaces()
+  dateInt = mdDate(row['Date'])
+  val = mdQty(row['Quantity'], decimals) # buy > 0, sell < 0
+  amt = mdQty(row['Amount'], 2) # in csv file, buy is > 0, sell is < 0
+  rate = float(val)/float(amt)
+  desc = row['Category']
+  memo = ''
+  price = row['Price'] # not used
+  action = row['Action']
+  detail = row['Transaction Type']
+  add_action = None
+  if action == 'Buy':
+    if detail.find('Gain/Loss') >= 0:
+      add_action = 'MiscInc'
+      memo = 'Gain'
+    elif detail.find('contribution') >= 0: # or dateInt == 20070910 (initial)
+      action = 'BuyXfr'
+    else:
+      pass
+  elif action == 'Sell':
+    if detail.find('Gain/Loss') >= 0:
+      add_action = 'MiscExp'
+      memo = 'Loss'
+  elif action == 'REINVDIV':
+    pass
+  else:
+    print "unhandled action ", action
+    return 0
+  print "ticker ", tickerSym, " date ", dateInt, " action ", action
+  processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
+  if add_action is not None:
+    processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, add_action, amt, val, rate)
   rootAcct.refreshAccountBalances()
   return 1
 
@@ -150,7 +165,7 @@ def processCsv(md, accountName, csvFileName):
   headers = None
   rownum = 0
   s = reader.readline()
-  while len(s) <> 0:
+  while len(s) > 0:
     fields = splitQuotedLine(s)
     if headers is None:
       headers = fields

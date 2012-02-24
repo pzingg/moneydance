@@ -8,15 +8,30 @@ import_account_trax.py
 This is a first attempt to parse csv file downloaded
 from AccountTrax accounts (401k plans that use Vanguard mutual funds).
 Securities (looked up by ticker symbol) must exist in the referenced
-account, or the transactions will not be created.  
-Treats Money Market "Buy" transactions as "DivReinvest", since they
-add to the value of the Money Market holdings.
-Distinguishes other "Buy" transactions by the comment "contribution",
-which means that the securities are bought with outside contributions
-rather than from the balance of the account.
-Debugged a lot of information from Moneydance by looking at the
-Java docs and by selecting a hand-entered transaction and clicking
-"Show Transaction Details".  Note that the 
+account, or the transactions will not be created.
 
-TODO: If re-importing a file, find and skip over matching transactions.
-TODO: Dump skipped transactions or other errors to a log file.
+Other Notes:
+- Treats a Gain/Loss "Buy" or "Sell" transaction as two separate 
+Moneydance parent transactions, one to record the security shares
+bought or sold due to the gain or loss, and a "MiscInc" or "MiscExp"
+transaction to change the account balance accordingly.
+- Distinguishes other "Buy" transactions by the comment "contribution",
+which means that the securities are bought with outside contributions
+rather than from the balance of the account.  These are entered 
+as "BuyXfr" transactions in Moneydance.
+- Gained a lot of information from Moneydance by looking at the
+Java docs and by selecting a hand-entered transaction and clicking
+"Show Transaction Details" to see an XML representation of the
+transaction.  Note that "<PARENTAMT>" values shown
+in the transaction details are shown as negative values, relative
+to the "parentAmount" argument passed to the SplitTxn constructor.
+As the comment for the constructor indicates, the constructor "Creates a 
+SplitTxn with the parentAmount having a negative effect on the 
+account of parentTxn".  A bit confusing, but I guess it's logical.
+Also had to figure out that there is an "Auto" built-in security account
+that has to be used when specifying the account side of the split.
+- TODO: Handle "TAKEOVER" AccountTrax actions.  These are used when
+rolling over securities into an AccountTrax account, to balance the
+AccountTrax shares purchased instead.
+- TODO: If re-importing a file, find and skip over matching transactions.
+- TODO: Dump skipped transactions or other errors to a log file.
