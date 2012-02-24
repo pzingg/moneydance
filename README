@@ -30,8 +30,20 @@ SplitTxn with the parentAmount having a negative effect on the
 account of parentTxn".  A bit confusing, but I guess it's logical.
 Also had to figure out that there is an "Auto" built-in security account
 that has to be used when specifying the account side of the split.
+- Note that in this system, a positive balance means you are adding
+to your portfolio (which actually costs money).
 - TODO: Handle "TAKEOVER" AccountTrax actions.  These are used when
 rolling over securities into an AccountTrax account, to balance the
 AccountTrax shares purchased instead.
 - TODO: If re-importing a file, find and skip over matching transactions.
 - TODO: Dump skipped transactions or other errors to a log file.
+
+import_morgan_stanley.py 
+
+First attempt to do the same for MorganStanley ClientServ downloads.
+Not fully tested.  
+
+- TODO: The positive and negative signs are reversed in
+MorganStanley's files from those in AccountTrax.  Will resolve and
+try to standardize.
+- TODO: Need a way to assign and lookup government bonds (no ticker symbol)

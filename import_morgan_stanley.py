@@ -79,11 +79,16 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-  elif action == 'BuyXfr':
+  elif action == 'BuyXfr' or action == 'SellXfr':
     txn.setTransferType(AbstractTxn.TRANSFER_TYPE_BUYSELLXFR)
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit.setTag('invest.splittype', 'xfr')
+    txn.addSplit(incSplit)
+  elif action == 'Xfr':
+    txn.setTransferType(AbstractTxn.TRANSFER_TYPE_BANK)
     incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'xfr')
     txn.addSplit(incSplit)
@@ -107,7 +112,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     txn.addSplit(incSplit)
   elif action == 'MiscInc' or action == 'MiscExp':
     txn.setTransferType(AbstractTxn.TRANSFER_TYPE_MISCINCEXP)
-    secSplit = SplitTxn(txn, 0, 0, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
+    secSplit = SplitTxn(txn, 0, 0, 1.0, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
     incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
@@ -130,7 +135,7 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
     print secAcctName, " security acct not found"
   return secAcct
 
-def processRow(row, rootAcct, invAcct, autoAcct):
+def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   amt = row['Amount']
   val = row['Quantity']
   if len(amt) == 0 and len(val) == 0:
@@ -143,44 +148,73 @@ def processRow(row, rootAcct, invAcct, autoAcct):
       return 0
   decimals = secAcct.getCurrencyType().getDecimalPlaces()
   dateInt = mdDate(row['Date'])
-  amt = mdQty(amt, 2) # in AT file, buy is > 0, sell is < 0
-  val = mdQty(val, decimals)  # in AT file, buy is > 0, sell is < 0
+  amt = mdQty(amt, 2) # in MS file, buy is < 0, sell is > 0
+  val = mdQty(val, decimals) # in MS file, always > 0
   rate = float(val)/float(amt)
-  desc = row['Category']
+  desc = row['Activity']
   memo = ''
   price = row['Price'] # not used
-  action = row['Action']
-  detail = row['Transaction Type']
-  add_action = None
-  if action == 'Buy':
-    if detail.find('Gain/Loss') >= 0:
-      add_action = 'MiscInc'
-      memo = 'Gain'
-    elif detail.find('contribution') >= 0: # or dateInt == 20070910 (initial)
+  action = ''
+  detail = row['Description']
+  if desc == 'Bought':
+    action = 'Buy'
+    desc = ''
+    amt = -amt # now amt is > 0
+  elif desc == 'Automatic Reinvestment':
+    action = 'Buy'
+    memo = detail
+    amt = -amt # now amt is > 0
+  elif desc == 'Sold':
+    action = 'Sell'
+    desc = ''
+    amt = -amt # now amt is < 0
+  elif desc == 'Redemption' or desc == 'Automatic Redemption':
+    action = 'Sell'
+    memo = detail
+    amt = -amt # now amt is < 0
+    val = -val # now val is < 0
+  elif desc == 'Class Exchange':
+    if amt < 0:
+      action = 'BuyXfr'
+      amt = -amt # now amt is > 0
+    else:
+      action = 'SellXfr'
+      amt = -amt # now amt is < 0
+      val = -val # now val is < 0
+    pass
+  elif desc == 'Branch Deposit' or desc == 'CASH TRANSFER' or desc == 'Transfer In': # in MS file, val == 0
+    action = 'Xfr'
+    memo = detail
+  elif desc == 'Transfer(Long)': # in MS file, amt == 0
+    if detail.find('INSTRUCTIONS TO') < 0:
       action = 'BuyXfr'
     else:
-      pass
-  elif action == 'Sell':
-    if detail.find('Gain/Loss') >= 0:
-      add_action = 'MiscExp'
-      memo = 'Loss'
-  elif action == 'REINVDIV':
-    action = 'DivReinvest'
+      action = 'SellXfr'
+      val = -val # now val is < 0
+    memo = detail
+  elif desc == 'Interest' or desc == 'Rebate': # in MS file, val == 0
+    action = 'MiscInc'
+    memo = detail
+  elif action.find('Fee') > 0: # in MS file, val == 0
+    action = 'MiscExp'
+    memo = detail
+  elif desc == 'Dividend': # in MS file, val == 0
+    action = 'Dividend'
+    memo = detail
   else:
-    print "unhandled action ", action
+    print "unhandled activity ", desc
     return 0
-  print "ticker ", tickerSym, " date ", dateInt, " action ", action
+  print "ticker ", tickerSym, " date ", dateInt, " activity ", desc, " action ", action
   processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
-  if add_action is not None:
-    processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, add_action, amt, val, rate)
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, accountName, csvFileName):
+def processCsv(md, accountName, bankTicker, csvFileName):
   rootAcct = md.getRootAccount()
   invAcct = rootAcct.getAccountByName(accountName)
   autoAcct = rootAcct.getAccountByName('Auto')
-  if invAcct is None or autoAcct is None:
+  bankAcct = getSecurityAcct(rootAcct, invAcct, bankTicker)
+  if invAcct is None or autoAcct is None or bankAcct is None:
     return
   reader = open(csvFileName, 'rb')
   headers = None
@@ -198,7 +232,7 @@ def processCsv(md, accountName, csvFileName):
       while i < nfields:
         row[headers[i]] = fields[i]
         i = i + 1
-      rv = processRow(row, rootAcct, invAcct, autoAcct)
+      rv = processRow(row, rootAcct, invAcct, autoAcct, bankAcct)
     s = reader.readline()
 
-processCsv(moneydance, 'Test', '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv')
+processCsv(moneydance, 'TR-MS Advisor 3394', 'MSBNK', '/Users/pz/Desktop/Moneydance/python/ms2012.csv')
