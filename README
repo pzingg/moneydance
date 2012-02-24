@@ -1,0 +1,22 @@
+moneydance
+
+scripts using Moneydance's python interface to update transactions
+in Moneydance
+
+import_account_trax.py 
+
+This is a first attempt to parse csv file downloaded
+from AccountTrax accounts (401k plans that use Vanguard mutual funds).
+Securities (looked up by ticker symbol) must exist in the referenced
+account, or the transactions will not be created.  
+Treats Money Market "Buy" transactions as "DivReinvest", since they
+add to the value of the Money Market holdings.
+Distinguishes other "Buy" transactions by the comment "contribution",
+which means that the securities are bought with outside contributions
+rather than from the balance of the account.
+Debugged a lot of information from Moneydance by looking at the
+Java docs and by selecting a hand-entered transaction and clicking
+"Show Transaction Details".  Note that the 
+
+TODO: If re-importing a file, find and skip over matching transactions.
+TODO: Dump skipped transactions or other errors to a log file.
