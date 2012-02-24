@@ -79,7 +79,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-  elif action == 'BuyXfr':
+  elif action == 'BuyXfr' or action == 'SellXfr':
     txn.setTransferType(AbstractTxn.TRANSFER_TYPE_BUYSELLXFR)
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
@@ -130,7 +130,7 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
     print secAcctName, " security acct not found"
   return secAcct
 
-def processRow(row, rootAcct, invAcct, autoAcct):
+def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   amt = row['Amount']
   val = row['Quantity']
   if len(amt) == 0 and len(val) == 0:
@@ -176,7 +176,7 @@ def processRow(row, rootAcct, invAcct, autoAcct):
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, accountName, csvFileName):
+def processCsv(md, csvFileName, accountName, bankTicker):
   rootAcct = md.getRootAccount()
   invAcct = rootAcct.getAccountByName(accountName)
   autoAcct = rootAcct.getAccountByName('Auto')
@@ -198,7 +198,7 @@ def processCsv(md, accountName, csvFileName):
       while i < nfields:
         row[headers[i]] = fields[i]
         i = i + 1
-      rv = processRow(row, rootAcct, invAcct, autoAcct)
+      rv = processRow(row, rootAcct, invAcct, autoAcct, None)
     s = reader.readline()
 
-processCsv(moneydance, 'Test', '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv')
+processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv', 'Test', None)

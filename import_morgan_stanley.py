@@ -209,7 +209,7 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, accountName, bankTicker, csvFileName):
+def processCsv(md, csvFileName, accountName, bankTicker):
   rootAcct = md.getRootAccount()
   invAcct = rootAcct.getAccountByName(accountName)
   autoAcct = rootAcct.getAccountByName('Auto')
@@ -235,4 +235,4 @@ def processCsv(md, accountName, bankTicker, csvFileName):
       rv = processRow(row, rootAcct, invAcct, autoAcct, bankAcct)
     s = reader.readline()
 
-processCsv(moneydance, 'TR-MS Advisor 3394', 'MSBNK', '/Users/pz/Desktop/Moneydance/python/ms2012.csv')
+processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/ms2012.csv', 'Test', 'MSBNK')
