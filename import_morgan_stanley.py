@@ -150,7 +150,6 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   dateInt = mdDate(row['Date'])
   amt = mdQty(amt, 2) # in MS file, buy is < 0, sell is > 0
   val = mdQty(val, decimals) # in MS file, always > 0
-  rate = float(val)/float(amt)
   desc = row['Activity']
   memo = ''
   price = row['Price'] # not used
@@ -160,7 +159,7 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
     action = 'Buy'
     desc = ''
     amt = -amt # now amt is > 0
-  elif desc == 'Automatic Reinvestment':
+  elif desc == 'Automatic Reinvestment' or desc == 'Automatic Investment':
     action = 'Buy'
     memo = detail
     amt = -amt # now amt is > 0
@@ -168,6 +167,7 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
     action = 'Sell'
     desc = ''
     amt = -amt # now amt is < 0
+    val = -val # now val is < 0
   elif desc == 'Redemption' or desc == 'Automatic Redemption':
     action = 'Sell'
     memo = detail
@@ -192,10 +192,10 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
       action = 'SellXfr'
       val = -val # now val is < 0
     memo = detail
-  elif desc == 'Interest' or desc == 'Rebate': # in MS file, val == 0
+  elif desc == 'Interest' or desc == 'Rebate' or desc.find('Capital Gain') >= 0: # in MS file, val == 0
     action = 'MiscInc'
     memo = detail
-  elif action.find('Fee') > 0: # in MS file, val == 0
+  elif desc.find('Fee') >= 0 or desc.find('Capital Loss') >= 0: # in MS file, val == 0
     action = 'MiscExp'
     memo = detail
   elif desc == 'Dividend': # in MS file, val == 0
@@ -204,6 +204,9 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   else:
     print "unhandled activity ", desc
     return 0
+  rate = 1.0
+  if amt <> 0:
+    rate = float(val)/float(amt)
   print "ticker ", tickerSym, " date ", dateInt, " activity ", desc, " action ", action
   processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
   rootAcct.refreshAccountBalances()

@@ -145,7 +145,6 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   dateInt = mdDate(row['Date'])
   amt = mdQty(amt, 2) # in AT file, buy is > 0, sell is < 0
   val = mdQty(val, decimals)  # in AT file, buy is > 0, sell is < 0
-  rate = float(val)/float(amt)
   desc = row['Category']
   memo = ''
   price = row['Price'] # not used
@@ -169,6 +168,9 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   else:
     print "unhandled action ", action
     return 0
+  rate = 1.0
+  if amt <> 0:
+    rate = float(val)/float(amt)
   print "ticker ", tickerSym, " date ", dateInt, " action ", action
   processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
   if add_action is not None:
