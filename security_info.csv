@@ -1,0 +1,4 @@
+fullName,currName,ticker,secType,subType,Market Cap,Sector,Industry,Country,apr,maturity,optType,optPrice,strikePrice
+Test:VFIAX Vanguard 500 Index Adm,VFIAX Vanguard 500 Index Adm,VFIAX,MUTUAL,U.S. Stocks,,,,,,,,,
+Test:VMMXX Vanguard Prime Money Mkt,VMMXX Vanguard Prime Money Mkt,VMMXX,MUTUAL,Money Market,,,,,,,,,
+Test:VOD Vodafone,VOD Vodafone,VOD,STOCK,International,139.64,0,Industries,United Kingdom,,,,,
