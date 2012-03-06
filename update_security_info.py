@@ -118,6 +118,8 @@ def processRow(row, rootAcct):
   else:
     print "skipped type ", secType
     return 0
+  acct.setPrefix(None) # clear these
+  acct.setSuffix(None)
   return 1
 
 def processCsv(md, csvFileName):
