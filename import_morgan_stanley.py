@@ -135,21 +135,24 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
     print secAcctName, " security acct not found"
   return secAcct
 
-def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
+def processRow(row, rootAcct, invAcct, autoAcct):
   amt = row['Amount']
   val = row['Quantity']
   if len(amt) == 0 and len(val) == 0:
     return 0
-  secAcct = bankAcct
+  secAcct = None
   tickerSym = row['Symbol']
   if len(tickerSym) > 0:
     secAcct = getSecurityAcct(rootAcct, invAcct, tickerSym)
     if secAcct is None:
       return 0
-  decimals = secAcct.getCurrencyType().getDecimalPlaces()
   dateInt = mdDate(row['Date'])
   amt = mdQty(amt, 2) # in MS file, buy is < 0, sell is > 0
-  val = mdQty(val, decimals) # in MS file, always > 0
+  if secAcct is not None:
+    decimals = secAcct.getCurrencyType().getDecimalPlaces()
+    val = mdQty(val, decimals) # in MS file, always > 0
+  else:
+    val = 0
   desc = row['Activity']
   memo = ''
   price = row['Price'] # not used
@@ -192,14 +195,20 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
       action = 'SellXfr'
       val = -val # now val is < 0
     memo = detail
-  elif desc == 'Interest' or desc == 'Rebate' or desc.find('Capital Gain') >= 0: # in MS file, val == 0
+  elif desc == 'Rebate' or desc.find('Capital Gain') >= 0: # in MS file, val == 0
     action = 'MiscInc'
     memo = detail
-  elif desc.find('Fee') >= 0 or desc.find('Capital Loss') >= 0: # in MS file, val == 0
+  elif desc.find('Capital Loss') >= 0: # in MS file, val == 0
     action = 'MiscExp'
     memo = detail
   elif desc == 'Dividend': # in MS file, val == 0
     action = 'Dividend'
+    memo = detail
+  elif desc == 'Interest': # in MS file, val == 0, amt >= 0
+    action = 'Xfr'
+    memo = detail
+  elif desc.find('Fee') >= 0: # in MS file, val == 0, amt >= 0 for fee rebate, <= 0 for fee
+    action = 'Xfr'
     memo = detail
   else:
     print "unhandled activity ", desc
@@ -212,12 +221,15 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, csvFileName, accountName, bankTicker):
+def processCsv(md, csvFileName, accountName, autoAcctName=''):
   rootAcct = md.getRootAccount()
   invAcct = rootAcct.getAccountByName(accountName)
-  autoAcct = rootAcct.getAccountByName('Auto')
-  bankAcct = getSecurityAcct(rootAcct, invAcct, bankTicker)
-  if invAcct is None or autoAcct is None or bankAcct is None:
+  if invAcct is None:
+    print "no such investment acct '", accountName, "'"
+    return
+  autoAcct = rootAcct.getAccountByName(autoAcctName)
+  if autoAcct is None:
+    print "no such default acct '", autoacctName, "'"
     return
   reader = open(csvFileName, 'rb')
   headers = None
@@ -235,7 +247,7 @@ def processCsv(md, csvFileName, accountName, bankTicker):
       while i < nfields:
         row[headers[i]] = fields[i]
         i = i + 1
-      rv = processRow(row, rootAcct, invAcct, autoAcct, bankAcct)
+      rv = processRow(row, rootAcct, invAcct, autoAcct)
     s = reader.readline()
 
-processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/ms2012.csv', 'Test', 'MSBNK')
+processCsv(moneydance, '/Users/pz/Documents/_Personal/_Financial/Moneydance/python/test.csv', 'Test')
