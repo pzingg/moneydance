@@ -71,7 +71,7 @@ def mdQty(qtyStr, decimals):
     frac = frac + '0'
   return int(neg + md + frac)
 
-def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate):
+def processTxn(rootAcct, invAcct, secAcct, xfrAcct, dateInt, desc, memo, action, amt, val, rate):
   txnSet = rootAcct.getTransactionSet()  
   txn = ParentTxn(dateInt, dateInt, dateInt, "", invAcct,  desc, memo, -1, AbstractTxn.STATUS_UNRECONCILED)
   if action == 'Buy' or action == 'Sell':
@@ -84,12 +84,12 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'xfr')
     txn.addSplit(incSplit)
   elif action == 'Xfr':
     txn.setTransferType(AbstractTxn.TRANSFER_TYPE_BANK)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'xfr')
     txn.addSplit(incSplit)
   elif action == 'Dividend':
@@ -98,7 +98,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, 0, 0, 1.0, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'inc')
     txn.addSplit(incSplit)
   elif action == 'DivReinvest':
@@ -107,7 +107,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'inc')
     txn.addSplit(incSplit)
   elif action == 'MiscInc' or action == 'MiscExp':
@@ -115,7 +115,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, 0, 0, 1.0, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     if action == 'MiscInc':
       incSplit.setTag('invest.splittype', 'inc')
     else:
@@ -135,7 +135,7 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
     print secAcctName, " security acct not found"
   return secAcct
 
-def processRow(row, rootAcct, invAcct, autoAcct):
+def processRow(row, rootAcct, invAcct, defAcct, xfrAcct):
   amt = row['Amount']
   val = row['Quantity']
   if len(amt) == 0 and len(val) == 0:
@@ -148,11 +148,12 @@ def processRow(row, rootAcct, invAcct, autoAcct):
       return 0
   dateInt = mdDate(row['Date'])
   amt = mdQty(amt, 2) # in MS file, buy is < 0, sell is > 0
-  if secAcct is not None:
+  if secAcct is None:
+    secAcct = defAcct # defAcct is because MS doesn't put ticker on interest payments
+    val = 0
+  else:
     decimals = secAcct.getCurrencyType().getDecimalPlaces()
     val = mdQty(val, decimals) # in MS file, always > 0
-  else:
-    val = 0
   desc = row['Activity']
   memo = ''
   price = row['Price'] # not used
@@ -205,8 +206,12 @@ def processRow(row, rootAcct, invAcct, autoAcct):
     action = 'Dividend'
     memo = detail
   elif desc == 'Interest': # in MS file, val == 0, amt >= 0
-    action = 'Xfr'
-    memo = detail
+    if tickerSym == 'MSBNK'
+      action = 'Xfr' # Morgan Stanley bank interest
+      memo = detail
+    else: 
+      action = 'MiscInc' # Bond or other security interest
+      memo = detail
   elif desc.find('Fee') >= 0: # in MS file, val == 0, amt >= 0 for fee rebate, <= 0 for fee
     action = 'Xfr'
     memo = detail
@@ -217,19 +222,22 @@ def processRow(row, rootAcct, invAcct, autoAcct):
   if amt <> 0:
     rate = float(val)/float(amt)
   print "ticker ", tickerSym, " date ", dateInt, " activity ", desc, " action ", action
-  processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
+  processTxn(rootAcct, invAcct, secAcct, xfrAcct, dateInt, desc, memo, action, amt, val, rate)
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, csvFileName, accountName, autoAcctName=''):
+def processCsv(md, csvFileName, accountName, defTickerSym, xfrAcctName=''):
   rootAcct = md.getRootAccount()
   invAcct = rootAcct.getAccountByName(accountName)
   if invAcct is None:
     print "no such investment acct '", accountName, "'"
     return
-  autoAcct = rootAcct.getAccountByName(autoAcctName)
-  if autoAcct is None:
-    print "no such default acct '", autoacctName, "'"
+  defAcct =   getSecurityAcct(rootAcct, invAcct, defTickerSym)
+  if defAcct is None:
+    return
+  xfrAcct = rootAcct.getAccountByName(xfrAcctName)
+  if xfrAcct is None:
+    print "no such transfer acct '", xfrAcctName, "'"
     return
   reader = open(csvFileName, 'rb')
   headers = None
@@ -247,7 +255,7 @@ def processCsv(md, csvFileName, accountName, autoAcctName=''):
       while i < nfields:
         row[headers[i]] = fields[i]
         i = i + 1
-      rv = processRow(row, rootAcct, invAcct, autoAcct)
+      rv = processRow(row, rootAcct, invAcct, defAcct, xfrAcct)
     s = reader.readline()
 
-processCsv(moneydance, '/Users/pz/Documents/_Personal/_Financial/Moneydance/python/test.csv', 'Test')
+processCsv(moneydance, '/Users/pz/Documents/_Personal/_Financial/Moneydance/python/test.csv', 'Test', 'VMMNX')
