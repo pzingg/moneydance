@@ -131,39 +131,32 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
   return secAcct
 
 def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
-  amt = row['Amount']
-  val = row['Quantity']
-  if len(amt) == 0 and len(val) == 0:
+  date = row['Trade Date']
+  tickerSym = row['Ticker']
+  action = row['Transaction']
+  if len(date) == 0 or len(tickerSym) == 0 or len(action) == 0:
     return 0
-  secAcct = bankAcct
-  tickerSym = row['Symbol']
-  if len(tickerSym) > 0:
-    secAcct = getSecurityAcct(rootAcct, invAcct, tickerSym)
-    if secAcct is None:
-      return 0
+  secAcct = getSecurityAcct(rootAcct, invAcct, tickerSym)
+  if secAcct is None:
+    return 0
   decimals = secAcct.getCurrencyType().getDecimalPlaces()
-  dateInt = mdDate(row['Date'])
-  amt = mdQty(amt, 2) # in AT file, buy is > 0, sell is < 0
+  amt = row['Transaction Amount']
+  val = row['Shares This Transaction']
+  dateInt = mdDate(date)
+  amt = mdQty(amt, 2) # in Versight file, buy is > 0, sell is < 0
   val = mdQty(val, decimals)  # in AT file, buy is > 0, sell is < 0
   desc = row['Category']
   memo = ''
-  price = row['Price'] # not used
-  action = row['Action']
-  detail = row['Transaction Type']
+  price = row['Share Price'] # not used
+  detail = row['Investments']
   add_action = None
-  if action == 'Buy':
-    if detail.find('Gain/Loss') >= 0:
-      add_action = 'MiscInc'
-      memo = 'Gain'
-    elif detail.find('contribution') >= 0: # or dateInt == 20070910 (initial)
-      action = 'BuyXfr'
-    else:
-      pass
-  elif action == 'Sell':
-    if detail.find('Gain/Loss') >= 0:
-      add_action = 'MiscExp'
-      memo = 'Loss'
-  elif action == 'REINVDIV':
+  if action == 'Contribution':
+    action = 'BuyXfr'
+  elif action == 'Exchange Purchase':
+    action = 'Buy'
+  elif action == 'Exchange Redemption':
+    action = 'Sell'
+  elif action == 'Dividend Reinvestment':
     action = 'DivReinvest'
   else:
     print "unhandled action ", action
@@ -203,4 +196,4 @@ def processCsv(md, csvFileName, accountName, bankTicker):
       rv = processRow(row, rootAcct, invAcct, autoAcct, None)
     s = reader.readline()
 
-processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv', 'Test', None)
+processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/verisight.csv', 'Test', None)
