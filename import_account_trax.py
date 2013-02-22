@@ -71,7 +71,7 @@ def mdQty(qtyStr, decimals):
     frac = frac + '0'
   return int(neg + md + frac)
 
-def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate):
+def processTxn(rootAcct, invAcct, secAcct, xfrAcct, dateInt, desc, memo, action, amt, val, rate):
   txnSet = rootAcct.getTransactionSet()  
   txn = ParentTxn(dateInt, dateInt, dateInt, "", invAcct,  desc, memo, -1, AbstractTxn.STATUS_UNRECONCILED)
   if action == 'Buy' or action == 'Sell':
@@ -84,7 +84,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'xfr')
     txn.addSplit(incSplit)
   elif action == 'Dividend':
@@ -93,7 +93,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, 0, 0, 1.0, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'inc')
     txn.addSplit(incSplit)
   elif action == 'DivReinvest':
@@ -102,7 +102,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, amt, val, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     incSplit.setTag('invest.splittype', 'inc')
     txn.addSplit(incSplit)
   elif action == 'MiscInc' or action == 'MiscExp':
@@ -110,7 +110,7 @@ def processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action
     secSplit = SplitTxn(txn, 0, 0, rate, secAcct, desc, -1, AbstractTxn.STATUS_UNRECONCILED)
     secSplit.setTag('invest.splittype', 'sec')
     txn.addSplit(secSplit)
-    incSplit = SplitTxn(txn, -amt, -amt, 1.0, autoAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
+    incSplit = SplitTxn(txn, -amt, -amt, 1.0, xfrAcct, '', -1, AbstractTxn.STATUS_UNRECONCILED)
     if action == 'MiscInc':
       incSplit.setTag('invest.splittype', 'inc')
     else:
@@ -130,7 +130,7 @@ def getSecurityAcct(rootAcct, invAcct, tickerSym):
     print secAcctName, " security acct not found"
   return secAcct
 
-def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
+def processRow(row, rootAcct, invAcct, xfrAcct, bankAcct):
   amt = row['Amount']
   val = row['Quantity']
   if len(amt) == 0 and len(val) == 0:
@@ -172,18 +172,28 @@ def processRow(row, rootAcct, invAcct, autoAcct, bankAcct):
   if amt != 0:
     rate = float(val)/float(amt)
   print "ticker ", tickerSym, " date ", dateInt, " action ", action
-  processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, action, amt, val, rate)
+  processTxn(rootAcct, invAcct, secAcct, xfrAcct, dateInt, desc, memo, action, amt, val, rate)
   if add_action is not None:
-    processTxn(rootAcct, invAcct, secAcct, autoAcct, dateInt, desc, memo, add_action, amt, val, rate)
+    processTxn(rootAcct, invAcct, secAcct, xfrAcct, dateInt, desc, memo, add_action, amt, val, rate)
   rootAcct.refreshAccountBalances()
   return 1
 
-def processCsv(md, csvFileName, accountName, bankTicker):
+def processCsv(md, csvFileName, invAcctName, xfrCategoryName='Unassigned'):
   rootAcct = md.getRootAccount()
-  invAcct = rootAcct.getAccountByName(accountName)
-  autoAcct = rootAcct.getAccountByName('Auto')
-  if invAcct is None or autoAcct is None:
+  invAcct = rootAcct.getAccountByName(invAcctName)
+  if invAcct is None:
+    print "could not find account ", invAcctName
     return
+  xfrAcct = None
+  if xfrCategoryName is not None:
+    xfrAcct = rootAcct.getAccountByName(xfrCategoryName)
+    if xfrAcct is None:
+      print "count not find category ", xfrCategoryName
+  if xfrAcct is None:
+    xfrAcct = invAcct.getDefaultCategory()
+    if xfrAcct is None:
+      print "could not get default category for account"
+      return
   reader = open(csvFileName, 'rb')
   headers = None
   rownum = 0
@@ -200,7 +210,7 @@ def processCsv(md, csvFileName, accountName, bankTicker):
       while i < nfields:
         row[headers[i]] = fields[i]
         i = i + 1
-      rv = processRow(row, rootAcct, invAcct, autoAcct, None)
+      rv = processRow(row, rootAcct, invAcct, xfrAcct, None)
     s = reader.readline()
 
-processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv', 'Test', None)
+processCsv(moneydance, '/Users/pz/Desktop/Moneydance/python/AccountTrax.csv', 'Test')

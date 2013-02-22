@@ -11,14 +11,17 @@ Securities (looked up by ticker symbol) must exist in the referenced
 account, or the transactions will not be created.
 
 Other Notes:
+
 - Treats a Gain/Loss "Buy" or "Sell" transaction as two separate 
 Moneydance parent transactions, one to record the security shares
 bought or sold due to the gain or loss, and a "MiscInc" or "MiscExp"
 transaction to change the account balance accordingly.
+
 - Distinguishes other "Buy" transactions by the comment "contribution",
 which means that the securities are bought with outside contributions
 rather than from the balance of the account.  These are entered 
 as "BuyXfr" transactions in Moneydance.
+
 - Gained a lot of information from Moneydance by looking at the
 Java docs and by selecting a hand-entered transaction and clicking
 "Show Transaction Details" to see an XML representation of the
@@ -30,20 +33,36 @@ SplitTxn with the parentAmount having a negative effect on the
 account of parentTxn".  A bit confusing, but I guess it's logical.
 Also had to figure out that there is an "Auto" built-in security account
 that has to be used when specifying the account side of the split.
+
 - Note that in this system, a positive balance means you are adding
 to your portfolio (which actually costs money).
+
 - TODO: Handle "TAKEOVER" AccountTrax actions.  These are used when
 rolling over securities into an AccountTrax account, to balance the
 AccountTrax shares purchased instead.
+
 - TODO: If re-importing a file, find and skip over matching transactions.
+
 - TODO: Dump skipped transactions or other errors to a log file.
 
-import_morgan_stanley.py 
+import_morgan_stanley.rb
 
 First attempt to do the same for MorganStanley ClientServ downloads.
 Not fully tested.  
 
-- TODO: The positive and negative signs are reversed in
-MorganStanley's files from those in AccountTrax.  Will resolve and
-try to standardize.
+- "Reorg Deliver" transactions do not show ticker symbol!  Need
+to manually add these to the import file, based on the security name
+that is shown in the description.  Ugh.
+
+- "Split Receive" seems to duplicate "Distribution", so we will
+drop the Distribution line.
+
 - TODO: Need a way to assign and lookup government bonds (no ticker symbol)
+
+- TODO: Don't use "MSBNK" or "Unassigned" categories.
+
+import_verisight.rb
+
+First attempt to import flat spreadsheet for Verisight 401K system.
+Not sure what "Increase Earnings" means in a Verisight transaction
+spreadsheet.

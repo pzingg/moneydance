@@ -13,7 +13,7 @@ def splitQuotedLine(line):
     c = line[i]
     i = i + 1
     if c == ',':
-      if in_quote <> 0:
+      if in_quote != 0:
         fend = fend + 1
       else:
         skip_to_comma = 0
@@ -22,7 +22,7 @@ def splitQuotedLine(line):
         fstart = i
         fend = i
     elif c == '"':
-      if in_quote <> 0:
+      if in_quote != 0:
         in_quote = 0
         skip_to_comma = 1
         continue
@@ -95,7 +95,7 @@ def processRow(row, rootAcct):
     print "could not find ", acctName
     return 0
   acctType = acct.getAccountType()
-  if acctType <> Account.ACCOUNT_TYPE_SECURITY:
+  if acctType != Account.ACCOUNT_TYPE_SECURITY:
     print "acct skipped ", acct.getFullAccountName()
     return 0
   print row['fullName']
